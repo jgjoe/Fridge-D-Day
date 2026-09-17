@@ -1,135 +1,113 @@
 package app.fridgedday.ui.addedit
 
-import android.Manifest
-import android.graphics.BitmapFactory
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import app.fridgedday.data.db.AppDatabase
 import app.fridgedday.data.db.entity.StorageLocation
 import app.fridgedday.data.repo.ItemRepository
-import app.fridgedday.ui.components.CameraPreview
 import app.fridgedday.ui.components.DatePickerField
+import app.fridgedday.ui.navigation.Destinations
 import app.fridgedday.util.DateUtils
-import app.fridgedday.util.PermissionUtils
-import app.fridgedday.util.ocr.TextRecognitionHelper
-import kotlinx.coroutines.launch
-import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneOffset
 
+private val NotifyDayOptions = listOf(3, 5, 7)
+
+/** 메모 필드의 최소 높이. 글자 확대에서는 이 높이 안의 줄 수가 함께 늘어난다. */
+private val NoteMinHeight = 100.dp
+
+/**
+ * 식품 등록·수정 화면.
+ *
+ * 기본 노출 필드는 유통기한·식품명·보관 위치뿐이고 수량·메모·알림은 "추가 정보" 뒤에 둔다.
+ * 카메라/갤러리 OCR은 [app.fridgedday.ui.scan.ScanScreen]이 담당하므로 이 화면에는 없다.
+ *
+ * [initialConfirmedDate]는 OCR 확인 화면에서 이미 사용자가 확정한 날짜다. 값이 있으면 그 날짜가
+ * 확정 상태로 시작하지만, 저장은 언제나 사용자가 "저장"을 눌렀을 때만 일어난다.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddEditScreen(
     navController: NavHostController,
-    itemId: Long?
+    itemId: Long?,
+    initialConfirmedDate: LocalDate? = null
 ) {
     val context = LocalContext.current
     val repository = remember {
-        val repository = ItemRepository(AppDatabase.getDatabase(context).itemDao())
-        repository
+        ItemRepository(AppDatabase.getDatabase(context).itemDao())
     }
     val viewModel: AddEditViewModel = viewModel(
         key = "add-edit-${itemId ?: "new"}",
-        factory = AddEditViewModelFactory(repository, itemId)
+        factory = AddEditViewModelFactory(repository, itemId, initialConfirmedDate)
     )
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    val coroutineScope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
+    var showAdditionalInfo by remember { mutableStateOf(false) }
+    var expandedLocation by remember { mutableStateOf(false) }
 
-    // OCR 관련 상태
-    var showCamera by remember { mutableStateOf(false) }
-    var isProcessingOCR by remember { mutableStateOf(false) }
-    var ocrDateToEdit by remember { mutableStateOf<LocalDate?>(null) }
-
-    // 1. 갤러리 이미지 선택 런처 (새로 추가됨)
-    val galleryLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri ->
-        if (uri != null) {
-            isProcessingOCR = true
-            coroutineScope.launch {
-                try {
-                    context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                        val bitmap = BitmapFactory.decodeStream(inputStream)
-                        
-                        val evaluation = TextRecognitionHelper.evaluateExpiryDate(bitmap, 0)
-                        val recognizedDate = evaluation.selectedDate
-                        // showSnackbar는 스낵바가 닫힐 때까지 반환하지 않는다. 진행 표시를 먼저 끈다.
-                        isProcessingOCR = false
-
-                        when {
-                            recognizedDate != null -> {
-                                viewModel.proposeOcrDate(recognizedDate)
-                                snackbarHostState.showSnackbar(
-                                    "날짜 후보를 찾았습니다. 확인 후 저장해주세요."
-                                )
-                            }
-                            evaluation.processedVariantCount == 0 && evaluation.failedVariantCount > 0 -> {
-                                snackbarHostState.showSnackbar(
-                                    "문자 인식을 준비하지 못했습니다. 인터넷 연결 후 다시 시도하거나 날짜를 직접 선택해주세요."
-                                )
-                            }
-                            else -> {
-                                snackbarHostState.showSnackbar(
-                                    "날짜를 찾지 못했습니다. 날짜를 직접 선택해주세요."
-                                )
-                            }
-                        }
-                    }
-                } catch (_: Exception) {
-                    isProcessingOCR = false
-                    snackbarHostState.showSnackbar(
-                        "이미지를 처리하지 못했습니다. 날짜를 직접 선택해주세요."
-                    )
-                } finally {
-                    isProcessingOCR = false
-                }
-            }
-        }
-    }
-
-    // 2. 카메라 권한 런처
-    val cameraPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            showCamera = true
-        } else {
-            coroutineScope.launch {
-                val result = snackbarHostState.showSnackbar(
-                    message = "촬영하려면 카메라 권한이 필요합니다.",
-                    actionLabel = "설정"
-                )
-                if (result == SnackbarResult.ActionPerformed) {
-                    PermissionUtils.openAppSettings(context)
-                }
-            }
-        }
-    }
-
-    // 저장 성공 시 뒤로 가기
+    // 저장 성공 시 새 등록이면 Today가 그 행을 찾을 수 있도록 이전 화면에 저장소가 돌려준 id를
+    // 남긴다. 그다음 입력 포커스와 키보드를 정리하고 뒤로 간다. 저장 직후에도 키보드가 남아 화면
+    // 전환이 가려지던 문제도 여기서 없앤다.
     LaunchedEffect(uiState.isSaved) {
-        if (uiState.isSaved) {
-            navController.popBackStack()
+        if (!uiState.isSaved) return@LaunchedEffect
+
+        uiState.savedItemId?.let { savedItemId ->
+            navController.previousBackStackEntry
+                ?.savedStateHandle
+                ?.set(Destinations.SAVED_ITEM_ID_KEY, savedItemId)
         }
+        focusManager.clearFocus()
+        navController.popBackStack()
     }
 
     // 에러 메시지 표시
@@ -143,23 +121,36 @@ fun AddEditScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (uiState.isEditMode) "항목 수정" else "항목 추가") },
+                title = { Text(if (uiState.isEditMode) "항목 수정" else "식품 등록") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "뒤로가기")
                     }
-                },
-                actions = {
-                    TextButton(
-                        onClick = { viewModel.saveItem() },
-                        enabled = !uiState.isLoading
-                    ) {
-                        Text("저장")
-                    }
                 }
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        // 저장은 폼과 함께 스크롤되지 않는 하단 고정 버튼 하나뿐이다. "추가 정보"를 펼쳐도 버튼은
+        // 제자리에 남고, 내비게이션 바와 키보드(IMM) 위에 뜬다.
+        bottomBar = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Button(
+                    onClick = { viewModel.saveItem() },
+                    enabled = !uiState.isLoading,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                ) {
+                    Text("저장")
+                }
+            }
+        }
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -169,37 +160,39 @@ fun AddEditScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Expiry Date. 화면이 따로 붙이던 "유통기한" 라벨은 없애고 필드 라벨 하나로 합쳤다.
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                DatePickerField(
+                    label = "유통기한 *",
+                    selectedDate = uiState.expiryDate,
+                    onDateSelected = { viewModel.confirmManualExpiryDate(it) },
+                    isError = uiState.expiryDateError != null,
+                    supportingText = uiState.expiryDateError,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                ExpiryDateStatus(uiState)
+            }
+
             // Name
             OutlinedTextField(
                 value = uiState.name,
                 onValueChange = { viewModel.updateName(it) },
-                label = { Text("이름 *") },
+                label = { Text("식품명 *") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                isError = uiState.errorMessage?.contains("이름") == true
-            )
-
-            // Category
-            OutlinedTextField(
-                value = uiState.category,
-                onValueChange = { viewModel.updateCategory(it) },
-                label = { Text("카테고리") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                isError = uiState.nameError != null,
+                supportingText = uiState.nameError?.let { nameError ->
+                    { Text(nameError) }
+                }
             )
 
             // Storage Location
-            var expandedLocation by remember { mutableStateOf(false) }
             ExposedDropdownMenuBox(
                 expanded = expandedLocation,
                 onExpandedChange = { expandedLocation = it }
             ) {
                 OutlinedTextField(
-                    value = when (uiState.location) {
-                        StorageLocation.FRIDGE -> "냉장"
-                        StorageLocation.FREEZER -> "냉동"
-                        StorageLocation.PANTRY -> "실온"
-                    },
+                    value = storageLocationLabel(uiState.location),
                     onValueChange = {},
                     readOnly = true,
                     label = { Text("보관 위치 *") },
@@ -212,339 +205,129 @@ fun AddEditScreen(
                     expanded = expandedLocation,
                     onDismissRequest = { expandedLocation = false }
                 ) {
-                    DropdownMenuItem(
-                        text = { Text("냉장") },
-                        onClick = {
-                            viewModel.updateLocation(StorageLocation.FRIDGE)
-                            expandedLocation = false
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("냉동") },
-                        onClick = {
-                            viewModel.updateLocation(StorageLocation.FREEZER)
-                            expandedLocation = false
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("실온") },
-                        onClick = {
-                            viewModel.updateLocation(StorageLocation.PANTRY)
-                            expandedLocation = false
-                        }
-                    )
+                    StorageLocation.entries.forEach { location ->
+                        DropdownMenuItem(
+                            text = { Text(storageLocationLabel(location)) },
+                            onClick = {
+                                viewModel.updateLocation(location)
+                                expandedLocation = false
+                            }
+                        )
+                    }
                 }
             }
 
-            // Quantity & Unit
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            HorizontalDivider()
+
+            TextButton(
+                onClick = { showAdditionalInfo = !showAdditionalInfo },
+                modifier = Modifier.heightIn(min = 48.dp)
             ) {
-                OutlinedTextField(
-                    value = uiState.quantity,
-                    onValueChange = { viewModel.updateQuantity(it) },
-                    label = { Text("수량") },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true
+                Icon(
+                    imageVector = if (showAdditionalInfo) {
+                        Icons.Default.ExpandLess
+                    } else {
+                        Icons.Default.ExpandMore
+                    },
+                    contentDescription = null
                 )
-                OutlinedTextField(
-                    value = uiState.unit,
-                    onValueChange = { viewModel.updateUnit(it) },
-                    label = { Text("단위") },
-                    placeholder = { Text("개, g, ml") },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true
-                )
+                Spacer(Modifier.width(8.dp))
+                Text(if (showAdditionalInfo) "추가 정보 접기" else "추가 정보")
             }
 
-            // Expiry Date with OCR (Camera & Gallery)
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "유통기한 *",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                DatePickerField(
-                    label = "",
-                    selectedDate = uiState.expiryDate,
-                    onDateSelected = { viewModel.confirmManualExpiryDate(it) },
-                    modifier = Modifier.fillMaxWidth()
-                )
+            if (showAdditionalInfo) {
+                // Quantity & Unit
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    OutlinedButton(
-                        onClick = {
-                            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-                        },
-                        enabled = !isProcessingOCR,
-                        modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = 48.dp)
-                    ) {
-                        if (isProcessingOCR) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp))
-                        } else {
-                            Icon(Icons.Default.CameraAlt, contentDescription = null)
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("촬영")
-                        }
-                    }
-                    OutlinedButton(
-                        onClick = {
-                            galleryLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                            )
-                        },
-                        enabled = !isProcessingOCR,
-                        modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = 48.dp)
-                    ) {
-                        Icon(Icons.Default.Image, contentDescription = null)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("갤러리")
-                    }
+                    OutlinedTextField(
+                        value = uiState.quantity,
+                        onValueChange = { viewModel.updateQuantity(it) },
+                        label = { Text("수량") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = uiState.unit,
+                        onValueChange = { viewModel.updateUnit(it) },
+                        label = { Text("단위") },
+                        placeholder = { Text("개, g, ml") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
                 }
-                
-                // 진행 상태 텍스트
-                if (isProcessingOCR) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp
-                        )
-                        Text(
-                            text = "이미지 분석 및 날짜 인식 중...",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                } else if (uiState.expiryDate == null) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ErrorOutline,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = "날짜를 선택해야 저장할 수 있습니다.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                } else if (uiState.isExpiryDateConfirmed) {
-                    val confirmedDate = uiState.expiryDate
-                    if (confirmedDate != null) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Text(
-                                text = "확인된 날짜: ${DateUtils.formatKorean(confirmedDate)}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                }
-            }
 
-            // Days Before Notify
-            Column {
-                Text(
-                    text = "임박 알림: ${uiState.daysBeforeNotify}일 전",
-                    style = MaterialTheme.typography.bodyMedium
+                // Days Before Notify
+                Column {
+                    Text(
+                        text = "임박 알림: ${uiState.daysBeforeNotify}일 전",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        NotifyDayOptions.forEach { days ->
+                            FilterChip(
+                                selected = uiState.daysBeforeNotify == days,
+                                onClick = { viewModel.updateDaysBeforeNotify(days) },
+                                label = { Text("${days}일") }
+                            )
+                        }
+                    }
+                }
+
+                // Note
+                OutlinedTextField(
+                    value = uiState.note,
+                    onValueChange = { viewModel.updateNote(it) },
+                    label = { Text("메모") },
+                    // 높이를 고정하면 글자 확대에서 적은 줄만 보인다. 최소 높이 안에서 늘어나게 두고
+                    // 그보다 긴 메모는 필드 자체 스크롤로 읽는다.
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = NoteMinHeight),
+                    maxLines = 6
                 )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    listOf(3, 5, 7).forEach { days ->
-                        FilterChip(
-                            selected = uiState.daysBeforeNotify == days,
-                            onClick = { viewModel.updateDaysBeforeNotify(days) },
-                            label = { Text("${days}일") }
-                        )
-                    }
-                }
             }
-
-            // Note
-            OutlinedTextField(
-                value = uiState.note,
-                onValueChange = { viewModel.updateNote(it) },
-                label = { Text("메모") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(100.dp),
-                maxLines = 4
-            )
 
             if (uiState.isLoading) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
         }
     }
-
-    // Camera Preview Dialog
-    if (showCamera) {
-        CameraPreview(
-            onImageCaptured = { bitmap ->
-                showCamera = false
-                isProcessingOCR = true
-
-                coroutineScope.launch {
-                    try {
-                        val evaluation = TextRecognitionHelper.evaluateExpiryDate(bitmap, 0)
-                        val recognizedDate = evaluation.selectedDate
-                        // showSnackbar는 스낵바가 닫힐 때까지 반환하지 않는다. 진행 표시를 먼저 끈다.
-                        isProcessingOCR = false
-
-                        when {
-                            recognizedDate != null -> {
-                                viewModel.proposeOcrDate(recognizedDate)
-                                snackbarHostState.showSnackbar(
-                                    "날짜 후보를 찾았습니다. 확인 후 저장해주세요."
-                                )
-                            }
-                            evaluation.processedVariantCount == 0 && evaluation.failedVariantCount > 0 -> {
-                                snackbarHostState.showSnackbar(
-                                    "문자 인식을 준비하지 못했습니다. 인터넷 연결 후 다시 시도하거나 날짜를 직접 선택해주세요."
-                                )
-                            }
-                            else -> {
-                                snackbarHostState.showSnackbar(
-                                    "날짜를 찾지 못했습니다. 날짜를 직접 선택해주세요."
-                                )
-                            }
-                        }
-                    } catch (_: Exception) {
-                        isProcessingOCR = false
-                        snackbarHostState.showSnackbar(
-                            "이미지를 처리하지 못했습니다. 날짜를 직접 선택해주세요."
-                        )
-                    } finally {
-                        isProcessingOCR = false
-                    }
-                }
-            },
-            onDismiss = {
-                showCamera = false
-            }
-        )
-    }
-
-    uiState.pendingOcrDate?.let { pendingDate ->
-        OcrDateConfirmationDialog(
-            recognizedDate = pendingDate,
-            onConfirm = { viewModel.confirmPendingOcrDate() },
-            onEdit = {
-                ocrDateToEdit = pendingDate
-                viewModel.cancelPendingOcrDate()
-            },
-            onCancel = { viewModel.cancelPendingOcrDate() }
-        )
-    }
-
-    ocrDateToEdit?.let { initialDate ->
-        OcrDateEditDialog(
-            initialDate = initialDate,
-            onDateSelected = { selectedDate ->
-                viewModel.confirmManualExpiryDate(selectedDate)
-                ocrDateToEdit = null
-            },
-            onDismiss = { ocrDateToEdit = null }
-        )
-    }
 }
 
+/**
+ * 저장 전에 유통기한이 확정됐음을 분명히 보여준다. 확정되지 않은 날짜는 저장되지 않으므로 확정
+ * 상태에서만 표시하고, 처음 들어온 화면에는 붉은 필수 오류를 미리 띄우지 않는다. 저장을 눌러
+ * 빠진 항목이 확인되면 그 오류는 필드 자체([DatePickerField]의 `supportingText`)가 보여준다.
+ */
 @Composable
-internal fun OcrDateConfirmationDialog(
-    recognizedDate: LocalDate,
-    onConfirm: () -> Unit,
-    onEdit: () -> Unit,
-    onCancel: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onCancel,
-        title = { Text("인식된 날짜가 맞나요?") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = DateUtils.formatKorean(recognizedDate),
-                    style = MaterialTheme.typography.headlineSmall
-                )
-                Text("라벨의 실제 유통기한과 같은지 확인해주세요.")
-            }
-        },
-        confirmButton = {
-            Button(onClick = onConfirm) {
-                Text("이 날짜 확인")
-            }
-        },
-        dismissButton = {
-            Row {
-                TextButton(onClick = onEdit) {
-                    Text("수정")
-                }
-                TextButton(onClick = onCancel) {
-                    Text("취소")
-                }
-            }
-        }
-    )
-}
+private fun ExpiryDateStatus(uiState: AddEditUiState) {
+    val expiryDate = uiState.expiryDate
+    if (expiryDate == null || !uiState.isExpiryDateConfirmed) return
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun OcrDateEditDialog(
-    initialDate: LocalDate,
-    onDateSelected: (LocalDate) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = initialDate
-            .atStartOfDay(ZoneOffset.UTC)
-            .toInstant()
-            .toEpochMilli()
-    )
-
-    DatePickerDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    datePickerState.selectedDateMillis?.let { millis ->
-                        val selectedDate = Instant.ofEpochMilli(millis)
-                            .atZone(ZoneOffset.UTC)
-                            .toLocalDate()
-                        onDateSelected(selectedDate)
-                    }
-                }
-            ) {
-                Text("날짜 확인")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("취소")
-            }
-        }
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        DatePicker(state = datePickerState)
+        Icon(
+            imageVector = Icons.Default.CheckCircle,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(16.dp)
+        )
+        Text(
+            text = "확인된 날짜: ${DateUtils.formatKorean(expiryDate)}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary
+        )
     }
+}
+
+private fun storageLocationLabel(location: StorageLocation): String = when (location) {
+    StorageLocation.FRIDGE -> "냉장"
+    StorageLocation.FREEZER -> "냉동"
+    StorageLocation.PANTRY -> "실온"
 }

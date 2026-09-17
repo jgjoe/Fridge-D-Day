@@ -125,7 +125,7 @@ UI·상태 관리·데이터 접근을 분리해 화면 로직이 Room 구현에
 요구사항: Android Studio · JDK 17 · Android SDK 36
 
 ```bash
-git clone https://github.com/crushonyou2/Fridge-D-Day.git
+git clone https://github.com/jgjoe/Fridge-D-Day.git
 cd Fridge-D-Day
 ./gradlew assembleDebug
 ```
@@ -169,5 +169,5 @@ app/src/main/java/app/fridgedday/
 
 **Jigwan Joe** — Android · Backend
 
-- GitHub: [@crushonyou2](https://github.com/crushonyou2)
+- GitHub: [@jgjoe](https://github.com/jgjoe)
 - Email: jigwan.joe@gmail.com

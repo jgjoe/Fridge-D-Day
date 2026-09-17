@@ -1,513 +1,393 @@
 package app.fridgedday.ui.home
 
-import android.Manifest
-import android.content.Intent
-import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.Inventory
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Sort
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.navigation.NavHostController
+import androidx.navigation.compose.currentBackStackEntryAsState
+import app.fridgedday.R
 import app.fridgedday.data.db.AppDatabase
+import app.fridgedday.data.db.entity.ItemEntity
 import app.fridgedday.data.db.entity.StorageLocation
+import app.fridgedday.data.pref.AppSettings
 import app.fridgedday.data.pref.SettingsDataStore
 import app.fridgedday.data.repo.ItemRepository
-import app.fridgedday.ui.components.ItemCard
+import app.fridgedday.ui.components.BundledArtwork
+import app.fridgedday.ui.components.FoodRow
+import app.fridgedday.ui.components.todayHeroDateLabel
 import app.fridgedday.ui.navigation.Destinations
-import app.fridgedday.util.DateUtils
-import app.fridgedday.util.PermissionUtils
+import app.fridgedday.ui.navigation.LocalTopLevelBottomContentInset
+import app.fridgedday.ui.navigation.TopLevelDestination
+import app.fridgedday.ui.navigation.TopLevelScaffold
+import app.fridgedday.ui.navigation.TopLevelSearchField
+import app.fridgedday.ui.navigation.TopLevelSidePadding
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.time.LocalDate
 
-@OptIn(ExperimentalMaterial3Api::class)
+private val SidePadding = TopLevelSidePadding
+private val EmptyStateMaxWidth = 360.dp
+private val EmptyStateHeroSize = 196.dp
+private const val EmptyStateHeroZoom = 2.35f
+
 @Composable
-fun HomeScreen(
-    navController: NavHostController
-) {
+fun HomeScreen(navController: NavHostController) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     val dataStore = remember { SettingsDataStore(context) }
-    val settings by dataStore.settingsFlow.collectAsState(initial = app.fridgedday.data.pref.AppSettings())
-
-    val viewModel = remember {
-        val repository = ItemRepository(AppDatabase.getDatabase(context).itemDao())
-        HomeViewModel(repository)
-    }
+    val settings by dataStore.settingsFlow.collectAsState(initial = AppSettings())
+    val viewModel: HomeViewModel = viewModel(factory = homeViewModelFactory)
     val uiState by viewModel.uiState.collectAsState()
-    var showSearchBar by remember { mutableStateOf(false) }
-    var showSortMenu by remember { mutableStateOf(false) }
-    var showLocationMenu by remember { mutableStateOf(false) }
-    var showWelcomeDialog by remember { mutableStateOf(false) }
-    var hasNotificationPermission by remember {
-        mutableStateOf(PermissionUtils.hasNotificationPermission(context))
+    val listState = rememberLazyListState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    var showFilterSheet by remember { mutableStateOf(false) }
+    var searchExpanded by remember { mutableStateOf(false) }
+
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    LaunchedEffect(backStackEntry) {
+        val handle = backStackEntry?.savedStateHandle ?: return@LaunchedEffect
+        val savedItemId = handle.get<Long>(Destinations.SAVED_ITEM_ID_KEY) ?: return@LaunchedEffect
+        handle.remove<Long>(Destinations.SAVED_ITEM_ID_KEY)
+        viewModel.revealItem(savedItemId)
     }
-
-    DisposableEffect(lifecycleOwner, context) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                hasNotificationPermission =
-                    PermissionUtils.hasNotificationPermission(context)
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
-
-    // 첫 실행 여부 확인 (한 번만 실행)
-    LaunchedEffect(Unit) {
-        if (settings.isFirstLaunch) {
-            showWelcomeDialog = true
-        }
-    }
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        hasNotificationPermission = isGranted
-    }
-
-    var showMenu by remember { mutableStateOf(false) }
-
-    // 온보딩 다이얼로그
-    if (showWelcomeDialog) {
-        AlertDialog(
-            onDismissRequest = { },
-            title = { Text("오늘도 신선에 오신 것을 환영합니다!") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("식품 유통기한을 효율적으로 관리하고 음식물 낭비를 줄여보세요!")
-                    Text("주요 기능:", fontWeight = FontWeight.Bold)
-                    Text("• 식품 등록 및 유통기한 알림")
-                    Text("• 카메라로 유통기한 자동 인식")
-                    Text("• 소비 완료 및 통계 확인")
-                    Text("• 보관 위치별 관리")
-                    Text("\n+ 버튼을 눌러 첫 식품을 등록해보세요!")
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        scope.launch {
-                            dataStore.setFirstLaunchCompleted()
-                            showWelcomeDialog = false
-                        }
-                    }
-                ) {
-                    Text("시작하기")
-                }
-            }
-        )
-    }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text("오늘도 신선")
-                },
-                actions = {
-                    // 정렬 버튼
-                    IconButton(onClick = { showSortMenu = true }) {
-                        Icon(Icons.Default.Sort, contentDescription = "정렬: ${sortLabel(uiState.sortType)}")
-                    }
-
-                    // 위치 필터 버튼
-                    IconButton(onClick = { showLocationMenu = true }) {
-                        Icon(Icons.Default.FilterList, contentDescription = "위치 필터: ${locationLabel(uiState.locationFilter)}")
-                    }
-
-                    IconButton(onClick = { showSearchBar = !showSearchBar }) {
-                        Icon(Icons.Default.Search, contentDescription = "검색")
-                    }
-
-                    // 정렬 메뉴
-                    DropdownMenu(
-                        expanded = showSortMenu,
-                        onDismissRequest = { showSortMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("유통기한 임박순") },
-                            modifier = Modifier.semantics {
-                                selected = uiState.sortType == SortType.EXPIRY_DATE
-                            },
-                            trailingIcon = {
-                                if (uiState.sortType == SortType.EXPIRY_DATE) {
-                                    Icon(Icons.Default.Check, contentDescription = null)
-                                }
-                            },
-                            onClick = {
-                                viewModel.setSortType(SortType.EXPIRY_DATE)
-                                showSortMenu = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("이름순") },
-                            modifier = Modifier.semantics {
-                                selected = uiState.sortType == SortType.NAME
-                            },
-                            trailingIcon = {
-                                if (uiState.sortType == SortType.NAME) {
-                                    Icon(Icons.Default.Check, contentDescription = null)
-                                }
-                            },
-                            onClick = {
-                                viewModel.setSortType(SortType.NAME)
-                                showSortMenu = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("등록일순") },
-                            modifier = Modifier.semantics {
-                                selected = uiState.sortType == SortType.CREATED_DATE
-                            },
-                            trailingIcon = {
-                                if (uiState.sortType == SortType.CREATED_DATE) {
-                                    Icon(Icons.Default.Check, contentDescription = null)
-                                }
-                            },
-                            onClick = {
-                                viewModel.setSortType(SortType.CREATED_DATE)
-                                showSortMenu = false
-                            }
-                        )
-                    }
-
-                    // 위치 필터 메뉴
-                    DropdownMenu(
-                        expanded = showLocationMenu,
-                        onDismissRequest = { showLocationMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("전체") },
-                            modifier = Modifier.semantics {
-                                selected = uiState.locationFilter == null
-                            },
-                            trailingIcon = {
-                                if (uiState.locationFilter == null) {
-                                    Icon(Icons.Default.Check, contentDescription = null)
-                                }
-                            },
-                            onClick = {
-                                viewModel.setLocationFilter(null)
-                                showLocationMenu = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("냉장") },
-                            modifier = Modifier.semantics {
-                                selected = uiState.locationFilter == StorageLocation.FRIDGE
-                            },
-                            trailingIcon = {
-                                if (uiState.locationFilter == StorageLocation.FRIDGE) {
-                                    Icon(Icons.Default.Check, contentDescription = null)
-                                }
-                            },
-                            onClick = {
-                                viewModel.setLocationFilter(StorageLocation.FRIDGE)
-                                showLocationMenu = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("냉동") },
-                            modifier = Modifier.semantics {
-                                selected = uiState.locationFilter == StorageLocation.FREEZER
-                            },
-                            trailingIcon = {
-                                if (uiState.locationFilter == StorageLocation.FREEZER) {
-                                    Icon(Icons.Default.Check, contentDescription = null)
-                                }
-                            },
-                            onClick = {
-                                viewModel.setLocationFilter(StorageLocation.FREEZER)
-                                showLocationMenu = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("실온") },
-                            modifier = Modifier.semantics {
-                                selected = uiState.locationFilter == StorageLocation.PANTRY
-                            },
-                            trailingIcon = {
-                                if (uiState.locationFilter == StorageLocation.PANTRY) {
-                                    Icon(Icons.Default.Check, contentDescription = null)
-                                }
-                            },
-                            onClick = {
-                                viewModel.setLocationFilter(StorageLocation.PANTRY)
-                                showLocationMenu = false
-                            }
-                        )
-                    }
-
-                    IconButton(onClick = { showMenu = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "메뉴")
-                    }
-                    DropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("통계") },
-                            onClick = {
-                                showMenu = false
-                                navController.navigate(Destinations.STATISTICS)
-                            },
-                            leadingIcon = {
-                                Icon(Icons.Default.BarChart, contentDescription = null)
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("목록 공유") },
-                            onClick = {
-                                showMenu = false
-                                shareItemList(context, uiState.items)
-                            },
-                            leadingIcon = {
-                                Icon(Icons.Default.Share, contentDescription = null)
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("설정") },
-                            onClick = {
-                                showMenu = false
-                                navController.navigate(Destinations.SETTINGS)
-                            },
-                            leadingIcon = {
-                                Icon(Icons.Default.Settings, contentDescription = null)
-                            }
-                        )
-                    }
-                }
+    LaunchedEffect(backStackEntry) {
+        val handle = backStackEntry?.savedStateHandle ?: return@LaunchedEffect
+        val consumedItemId =
+            handle.get<Long>(Destinations.CONSUMED_ITEM_ID_KEY) ?: return@LaunchedEffect
+        handle.remove<Long>(Destinations.CONSUMED_ITEM_ID_KEY)
+        scope.launch {
+            val result = snackbarHostState.showSnackbar(
+                message = "소비 완료로 표시했어요",
+                actionLabel = "실행 취소",
+                duration = SnackbarDuration.Long
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { navController.navigate(Destinations.ADD) }
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "추가")
+            if (result == SnackbarResult.ActionPerformed) {
+                val restored = withContext(NonCancellable) {
+                    viewModel.restoreConsumed(consumedItemId)
+                }
+                if (!restored) snackbarHostState.showSnackbar("실행 취소를 완료하지 못했습니다")
             }
         }
+    }
+
+    LaunchedEffect(uiState.pendingRevealItemId, uiState.items) {
+        val id = uiState.pendingRevealItemId ?: return@LaunchedEffect
+        val index = uiState.items.indexOfFirst { it.id == id }
+        if (index >= 0) {
+            listState.animateScrollToItem(index)
+            viewModel.consumeReveal()
+        }
+    }
+
+
+    val completeFirstLaunch: suspend () -> Unit = {
+        if (settings.isFirstLaunch) dataStore.setFirstLaunchCompleted()
+    }
+    val openManualEntry: () -> Unit = {
+        scope.launch {
+            completeFirstLaunch()
+            navController.navigate(Destinations.ADD)
+        }
+    }
+    val openScan: () -> Unit = {
+        scope.launch {
+            completeFirstLaunch()
+            navController.navigate(Destinations.SCAN) { launchSingleTop = true }
+        }
+    }
+
+    LaunchedEffect(settings.isFirstLaunch, uiState.totalItemCount) {
+        if (settings.isFirstLaunch && uiState.totalItemCount > 0) {
+            withContext(NonCancellable) { dataStore.setFirstLaunchCompleted() }
+        }
+    }
+
+    val resetFilters = {
+        viewModel.setSearchKeyword("")
+        viewModel.setLocationFilter(null)
+        viewModel.setSortType(SortType.EXPIRY_DATE)
+        viewModel.setFilter(FilterType.ALL)
+    }
+
+    TopLevelScaffold(
+        selected = TopLevelDestination.TODAY,
+        navController = navController,
+        onSearchClick = {
+            if (searchExpanded) viewModel.setSearchKeyword("")
+            searchExpanded = !searchExpanded
+        },
+        showAddAction = uiState.totalItemCount > 0,
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Notification Permission Banner
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    Icons.Default.Notifications,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "알림 권한 필요",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "유통기한 알림을 받으려면 권한을 허용해주세요",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-                        Column(horizontalAlignment = Alignment.End) {
-                            Button(
-                                onClick = {
-                                    permissionLauncher.launch(
-                                        Manifest.permission.POST_NOTIFICATIONS
-                                    )
-                                }
-                            ) {
-                                Text("허용")
-                            }
-                            TextButton(
-                                onClick = {
-                                    PermissionUtils.openAppSettings(context)
-                                },
-                                colors = ButtonDefaults.textButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                            ) {
-                                Text("앱 설정")
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Search Bar
-            if (showSearchBar) {
-                TextField(
+            if (searchExpanded) {
+                TopLevelSearchField(
                     value = uiState.searchKeyword,
-                    onValueChange = { viewModel.setSearchKeyword(it) },
-                    placeholder = { Text("이름으로 검색") },
-                    leadingIcon = {
-                        Icon(Icons.Default.Search, contentDescription = null)
-                    },
-                    trailingIcon = {
-                        if (uiState.searchKeyword.isNotEmpty()) {
-                            IconButton(onClick = { viewModel.setSearchKeyword("") }) {
-                                Icon(Icons.Default.Close, contentDescription = "검색어 지우기")
-                            }
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    singleLine = true
-                )
-            }
-
-            // Filter Tabs
-            TabRow(
-                selectedTabIndex = uiState.filterType.ordinal
-            ) {
-                Tab(
-                    selected = uiState.filterType == FilterType.ALL,
-                    onClick = { viewModel.setFilter(FilterType.ALL) },
-                    text = { Text("전체") }
-                )
-                Tab(
-                    selected = uiState.filterType == FilterType.EXPIRING,
-                    onClick = { viewModel.setFilter(FilterType.EXPIRING) },
-                    text = { Text("임박") }
-                )
-                Tab(
-                    selected = uiState.filterType == FilterType.EXPIRED,
-                    onClick = { viewModel.setFilter(FilterType.EXPIRED) },
-                    text = { Text("만료") }
-                )
-            }
-
-            // Active state summary: sort / location / search / result count
-            val hasActiveSearch = uiState.searchKeyword.isNotBlank()
-            val hasNonDefaultState = hasActiveSearch ||
-                uiState.locationFilter != null ||
-                uiState.sortType != SortType.EXPIRY_DATE ||
-                uiState.filterType != FilterType.ALL
-            val resetFilters = {
-                viewModel.setSearchKeyword("")
-                viewModel.setLocationFilter(null)
-                viewModel.setSortType(SortType.EXPIRY_DATE)
-                viewModel.setFilter(FilterType.ALL)
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = buildString {
-                        append(sortLabel(uiState.sortType))
-                        append(" · 위치 ")
-                        append(locationLabel(uiState.locationFilter))
-                        if (hasActiveSearch) {
-                            append(" · \"")
-                            append(uiState.searchKeyword)
-                            append("\" 검색 중")
-                        }
-                        append(" · ")
-                        append(uiState.items.size)
-                        append("개")
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                if (hasNonDefaultState) {
-                    TextButton(
-                        onClick = resetFilters,
-                        modifier = Modifier.heightIn(min = 48.dp)
-                    ) {
-                        Text("초기화")
+                    onValueChange = viewModel::setSearchKeyword,
+                    onClose = {
+                        viewModel.setSearchKeyword("")
+                        searchExpanded = false
                     }
-                }
+                )
             }
 
-            // Item List
-            if (uiState.items.isEmpty()) {
-                if (uiState.totalItemCount == 0) {
-                    EmptyState(onAddClick = { navController.navigate(Destinations.ADD) })
-                } else {
-                    NoResultsState(onResetClick = resetFilters)
+            if (uiState.totalItemCount == 0) {
+                when (todayEmptyState(settings.isFirstLaunch, uiState.totalItemCount)) {
+                    TodayEmptyState.FIRST_USE -> FirstUseState(openManualEntry, openScan)
+                    TodayEmptyState.NO_ITEMS, TodayEmptyState.NO_RESULTS ->
+                        EmptyState(openManualEntry, openScan)
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(
+                TodayHeader(
+                    totalItemCount = uiState.totalItemCount,
+                    filterSortActive = isFilterSortActive(uiState),
+                    onOpenFilterSheet = { showFilterSheet = true }
+                )
+                TodayFilterChips(
+                    selected = uiState.filterType,
+                    counts = uiState.bucketCounts,
+                    onSelect = viewModel::setFilter
+                )
+                if (uiState.items.isEmpty()) {
+                    NoResultsState(onResetClick = resetFilters)
+                } else {
+                    TodayFoodList(
                         items = uiState.items,
-                        key = { it.id }
-                    ) { item ->
-                        ItemCard(
-                            item = item,
-                            onClick = {
-                                navController.navigate(Destinations.editRoute(item.id))
-                            },
-                            onMarkConsumed = {
-                                viewModel.markConsumed(item.id)
-                            },
-                            onDelete = {
-                                viewModel.deleteItem(item)
-                            }
+                        listState = listState,
+                        onItemClick = { item ->
+                            navController.navigate(Destinations.detailRoute(item.id))
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    if (showFilterSheet) {
+        FilterSortSheet(
+            filterType = uiState.filterType,
+            locationFilter = uiState.locationFilter,
+            sortType = uiState.sortType,
+            onFilterChange = viewModel::setFilter,
+            onLocationChange = viewModel::setLocationFilter,
+            onSortChange = viewModel::setSortType,
+            onReset = resetFilters,
+            onDismiss = { showFilterSheet = false }
+        )
+    }
+}
+
+@Composable
+private fun TodayHeader(
+    totalItemCount: Int,
+    filterSortActive: Boolean,
+    onOpenFilterSheet: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val actionContainer = if (filterSortActive) {
+        MaterialTheme.colorScheme.secondaryContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerLow
+    }
+    val actionContent = if (filterSortActive) {
+        MaterialTheme.colorScheme.onSecondaryContainer
+    } else {
+        MaterialTheme.colorScheme.primary
+    }
+    val actionBorder = if (filterSortActive) {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+    } else {
+        MaterialTheme.colorScheme.outlineVariant
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = SidePadding, end = 8.dp, top = 10.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "오늘 확인할 식품",
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontSize = 22.sp,
+                    lineHeight = 28.sp,
+                    fontWeight = FontWeight.Bold
+                ),
+                modifier = Modifier.semantics { heading() }
+            )
+            Text(
+                text = "${todayHeroDateLabel(LocalDate.now())} · 관리 중 ${totalItemCount}개",
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Normal
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 3.dp)
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    role = Role.Button,
+                    onClick = onOpenFilterSheet
+                )
+                .semantics {
+                    contentDescription = "필터 및 정렬"
+                    stateDescription = if (filterSortActive) {
+                        "필터 또는 정렬 적용됨"
+                    } else {
+                        "기본값"
+                    }
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Surface(
+                color = actionContainer,
+                contentColor = actionContent,
+                shape = CircleShape,
+                border = BorderStroke(1.dp, actionBorder),
+                tonalElevation = 0.dp
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Tune,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .padding(8.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TodayFilterChips(
+    selected: FilterType,
+    counts: TodayBucketCounts,
+    onSelect: (FilterType) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .selectableGroup()
+            .padding(horizontal = SidePadding, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        FilterType.entries.forEach { filter ->
+            val isSelected = selected == filter
+            val interactionSource = remember(filter) { MutableInteractionSource() }
+            Box(
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .selectable(
+                        selected = isSelected,
+                        interactionSource = interactionSource,
+                        indication = null,
+                        role = Role.RadioButton,
+                        onClick = { onSelect(filter) }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    color = if (isSelected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    },
+                    contentColor = if (isSelected) {
+                        MaterialTheme.colorScheme.onPrimary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    tonalElevation = 0.dp
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .height(40.dp)
+                            .padding(horizontal = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "${filterLabel(filter)} ${counts.count(filter)}",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                            maxLines = 1
                         )
                     }
                 }
@@ -517,31 +397,216 @@ fun HomeScreen(
 }
 
 @Composable
-fun NoResultsState(onResetClick: () -> Unit) {
-    Box(
+private fun TodayFoodList(
+    items: List<ItemEntity>,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    onItemClick: (ItemEntity) -> Unit
+) {
+    LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(
+            start = SidePadding,
+            end = SidePadding,
+            bottom = 16.dp + LocalTopLevelBottomContentInset.current
+        )
+    ) {
+        items(items.size, key = { items[it].id }) { index ->
+            val item = items[index]
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                shape = RoundedCornerShape(18.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                tonalElevation = 0.dp,
+                shadowElevation = 1.dp
+            ) {
+                FoodRow(item = item, onClick = { onItemClick(item) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun TodayBlankState(onManualEntry: () -> Unit, onScan: () -> Unit) {
+    val scanInteractionSource = remember { MutableInteractionSource() }
+    val manualInteractionSource = remember { MutableInteractionSource() }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.padding(32.dp)
+            modifier = Modifier
+                .widthIn(max = EmptyStateMaxWidth)
+                .padding(horizontal = 24.dp, vertical = 18.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "조건에 맞는 식품이 없어요",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center
+                text = "어떤 식품을 기록할까요?",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Start,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { heading() }
             )
             Text(
-                text = "검색어 또는 필터를 바꿔보세요.",
+                text = "식품을 등록하고\n더 신선한 일상을 시작해보세요.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Start,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp)
             )
-            OutlinedButton(
-                onClick = onResetClick,
-                modifier = Modifier.heightIn(min = 48.dp)
+            BundledArtwork(
+                resId = R.drawable.grocery_hero,
+                size = EmptyStateHeroSize,
+                zoom = EmptyStateHeroZoom,
+                modifier = Modifier.padding(vertical = 10.dp)
+            )
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                shape = CircleShape,
+                tonalElevation = 0.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 52.dp)
+                        .clickable(
+                            interactionSource = scanInteractionSource,
+                            indication = null,
+                            role = Role.Button,
+                            onClick = onScan
+                        )
+                        .padding(horizontal = 24.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Filled.CameraAlt, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("바로 스캔하기")
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            Surface(
+                color = MaterialTheme.colorScheme.background,
+                contentColor = MaterialTheme.colorScheme.primary,
+                shape = CircleShape,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                tonalElevation = 0.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .clickable(
+                            interactionSource = manualInteractionSource,
+                            indication = null,
+                            role = Role.Button,
+                            onClick = onManualEntry
+                        )
+                        .padding(horizontal = 22.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("직접 입력하기")
+                }
+            }
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f),
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                shape = MaterialTheme.shapes.medium
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Lightbulb,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "작은 기록이\n더 맛있는 일상을 만들어줘요.",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(start = 10.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+enum class TodayEmptyState { FIRST_USE, NO_ITEMS, NO_RESULTS }
+
+fun todayEmptyState(isFirstLaunch: Boolean, totalItemCount: Int): TodayEmptyState = when {
+    totalItemCount > 0 -> TodayEmptyState.NO_RESULTS
+    isFirstLaunch -> TodayEmptyState.FIRST_USE
+    else -> TodayEmptyState.NO_ITEMS
+}
+
+@Composable
+fun FirstUseState(onManualEntry: () -> Unit, onScan: () -> Unit = {}) {
+    TodayBlankState(onManualEntry = onManualEntry, onScan = onScan)
+}
+
+@Composable
+fun EmptyState(onManualEntry: () -> Unit, onScan: () -> Unit = {}) {
+    TodayBlankState(onManualEntry = onManualEntry, onScan = onScan)
+}
+
+@Composable
+fun NoResultsState(onResetClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(bottom = LocalTopLevelBottomContentInset.current)
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "조건에 맞는 식품이 없어요",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            text = "검색어 또는 필터를 바꿔보세요.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 6.dp)
+        )
+        Surface(
+            modifier = Modifier.padding(top = 14.dp),
+            color = MaterialTheme.colorScheme.background,
+            contentColor = MaterialTheme.colorScheme.primary,
+            shape = CircleShape,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            tonalElevation = 0.dp
+        ) {
+            Box(
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        role = Role.Button,
+                        onClick = onResetClick
+                    )
+                    .padding(horizontal = 22.dp),
+                contentAlignment = Alignment.Center
             ) {
                 Text("필터 초기화")
             }
@@ -549,94 +614,161 @@ fun NoResultsState(onResetClick: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EmptyState(onAddClick: () -> Unit) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
+private fun FilterSortSheet(
+    filterType: FilterType,
+    locationFilter: StorageLocation?,
+    sortType: SortType,
+    onFilterChange: (FilterType) -> Unit,
+    onLocationChange: (StorageLocation?) -> Unit,
+    onSortChange: (SortType) -> Unit,
+    onReset: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val resetInteractionSource = remember { MutableInteractionSource() }
+    ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.padding(32.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 32.dp)
         ) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(88.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Inventory,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(40.dp)
+                Text(
+                    text = "필터 · 정렬",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
+                )
+                Box(
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .clickable(
+                            interactionSource = resetInteractionSource,
+                            indication = null,
+                            role = Role.Button,
+                            onClick = onReset
+                        )
+                        .padding(horizontal = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("초기화", color = MaterialTheme.colorScheme.primary)
+                }
+            }
+            FilterChoiceGroup("상태") {
+                FilterType.entries.forEach { option ->
+                    FilterChoiceRow(
+                        label = filterLabel(option),
+                        selected = filterType == option,
+                        onSelect = { onFilterChange(option) }
                     )
                 }
             }
-            Text(
-                text = "등록된 식품이 없어요",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = "아래 버튼으로 첫 식품을 등록하고\n유통기한을 관리해보세요!",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-            Button(
-                onClick = onAddClick,
-                modifier = Modifier.heightIn(min = 48.dp)
-            ) {
-                Text("첫 식품 등록")
+            FilterGroupSeparator()
+            FilterChoiceGroup("보관 위치") {
+                FilterChoiceRow("전체", locationFilter == null) { onLocationChange(null) }
+                StorageLocation.entries.forEach { option ->
+                    FilterChoiceRow(
+                        label = locationLabel(option),
+                        selected = locationFilter == option,
+                        onSelect = { onLocationChange(option) }
+                    )
+                }
+            }
+            FilterGroupSeparator()
+            FilterChoiceGroup("정렬") {
+                SortType.entries.forEach { option ->
+                    FilterChoiceRow(
+                        label = sortLabel(option),
+                        selected = sortType == option,
+                        onSelect = { onSortChange(option) }
+                    )
+                }
             }
         }
     }
 }
 
-private fun sortLabel(sortType: SortType): String = when (sortType) {
+@Composable
+private fun FilterChoiceGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp)
+        )
+        Column(modifier = Modifier.fillMaxWidth().selectableGroup(), content = content)
+    }
+}
+
+@Composable
+private fun FilterGroupSeparator() {
+    HorizontalDivider(
+        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+        color = MaterialTheme.colorScheme.outlineVariant
+    )
+}
+
+@Composable
+private fun FilterChoiceRow(label: String, selected: Boolean, onSelect: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .selectable(
+                selected = selected,
+                interactionSource = interactionSource,
+                indication = null,
+                role = Role.RadioButton,
+                onClick = onSelect
+            )
+            .padding(horizontal = 24.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
+        if (selected) Icon(Icons.Filled.Check, contentDescription = null)
+    }
+}
+
+internal fun isFilterSortActive(uiState: HomeUiState): Boolean =
+    uiState.filterType != FilterType.ALL ||
+        uiState.locationFilter != null ||
+        uiState.sortType != SortType.EXPIRY_DATE
+
+private fun filterLabel(filter: FilterType): String = when (filter) {
+    FilterType.ALL -> "전체"
+    FilterType.NEEDS_ATTENTION -> "임박"
+    FilterType.SOON -> "보통"
+    FilterType.REST -> "여유"
+}
+
+private fun sortLabel(sort: SortType): String = when (sort) {
     SortType.EXPIRY_DATE -> "유통기한 임박순"
     SortType.NAME -> "이름순"
     SortType.CREATED_DATE -> "등록일순"
 }
 
-private fun locationLabel(location: StorageLocation?): String = when (location) {
-    null -> "전체"
+private fun locationLabel(location: StorageLocation): String = when (location) {
     StorageLocation.FRIDGE -> "냉장"
     StorageLocation.FREEZER -> "냉동"
     StorageLocation.PANTRY -> "실온"
 }
 
-private fun shareItemList(context: android.content.Context, items: List<app.fridgedday.data.db.entity.ItemEntity>) {
-    if (items.isEmpty()) {
-        return
+private val homeViewModelFactory: ViewModelProvider.Factory = viewModelFactory {
+    initializer {
+        val application = requireNotNull(
+            this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]
+        )
+        HomeViewModel(ItemRepository(AppDatabase.getDatabase(application).itemDao()))
     }
-
-    val shareText = buildString {
-        appendLine("오늘도 신선 - 식품 관리 목록")
-        appendLine()
-
-        items.forEach { item ->
-            val dDay = DateUtils.formatDDay(item.expiryDate)
-            val location = when (item.location) {
-                app.fridgedday.data.db.entity.StorageLocation.FRIDGE -> "냉장"
-                app.fridgedday.data.db.entity.StorageLocation.FREEZER -> "냉동"
-                app.fridgedday.data.db.entity.StorageLocation.PANTRY -> "실온"
-            }
-            appendLine("• ${item.name} [$location] - $dDay")
-        }
-
-        appendLine()
-        appendLine("오늘도 신선 앱으로 관리 중")
-    }
-
-    val sendIntent = Intent().apply {
-        action = Intent.ACTION_SEND
-        putExtra(Intent.EXTRA_TEXT, shareText)
-        type = "text/plain"
-    }
-
-    val shareIntent = Intent.createChooser(sendIntent, "목록 공유")
-    context.startActivity(shareIntent)
 }

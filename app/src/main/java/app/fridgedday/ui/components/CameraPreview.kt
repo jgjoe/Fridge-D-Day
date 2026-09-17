@@ -36,9 +36,25 @@ fun CameraPreview(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
+    val cameraProviderFuture = remember(context) { ProcessCameraProvider.getInstance(context) }
+    val mainExecutor = remember(context) { ContextCompat.getMainExecutor(context) }
+
     var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
     var isCapturing by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // 컴포지션을 떠나면 CameraX 바인딩을 해제한다. provider가 아직 준비되지 않은 채
+    // 해제되면 늦게 도착한 콜백이 카메라를 다시 잡지 않도록 isDisposed로 막는다.
+    val isDisposed = remember { mutableStateOf(false) }
+    DisposableEffect(cameraProviderFuture) {
+        onDispose {
+            isDisposed.value = true
+            cameraProviderFuture.addListener(
+                { runCatching { cameraProviderFuture.get().unbindAll() } },
+                mainExecutor
+            )
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Camera Preview
@@ -52,32 +68,39 @@ fun CameraPreview(
                     scaleType = PreviewView.ScaleType.FILL_CENTER
                 }
 
-                val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
                 cameraProviderFuture.addListener({
-                    val cameraProvider = cameraProviderFuture.get()
+                    // 해제된 뒤에는 provider가 늦게 준비돼도 카메라를 잡지 않는다.
+                    if (isDisposed.value) return@addListener
+
+                    val cameraProvider = try {
+                        cameraProviderFuture.get()
+                    } catch (e: Exception) {
+                        errorMessage = "카메라 초기화 실패: ${e.message}"
+                        return@addListener
+                    }
 
                     val preview = Preview.Builder().build().also {
                         it.setSurfaceProvider(previewView.surfaceProvider)
                     }
 
-                    val imageCaptureBuilder = ImageCapture.Builder()
+                    val capture = ImageCapture.Builder()
                         .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                    imageCapture = imageCaptureBuilder.build()
-
-                    val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+                        .build()
 
                     try {
                         cameraProvider.unbindAll()
                         cameraProvider.bindToLifecycle(
                             lifecycleOwner,
-                            cameraSelector,
+                            CameraSelector.DEFAULT_BACK_CAMERA,
                             preview,
-                            imageCapture
+                            capture
                         )
+                        // 바인딩이 끝난 뒤에만 촬영을 준비 상태로 노출한다.
+                        imageCapture = capture
                     } catch (e: Exception) {
                         errorMessage = "카메라 초기화 실패: ${e.message}"
                     }
-                }, ContextCompat.getMainExecutor(ctx))
+                }, mainExecutor)
 
                 previewView
             },
@@ -138,26 +161,26 @@ fun CameraPreview(
 
             FloatingActionButton(
                 onClick = {
-                    if (!isCapturing) {
+                    // ImageCapture가 준비되기 전 입력은 무시하고 촬영 상태로 들어가지 않는다.
+                    val capture = imageCapture
+                    if (!isCapturing && capture != null) {
                         isCapturing = true
-                        imageCapture?.let { capture ->
-                            capture.takePicture(
-                                ContextCompat.getMainExecutor(context),
-                                object : ImageCapture.OnImageCapturedCallback() {
-                                    override fun onCaptureSuccess(image: ImageProxy) {
-                                        val bitmap = image.toBitmap()
-                                        image.close()
-                                        onImageCaptured(bitmap)
-                                        isCapturing = false
-                                    }
-
-                                    override fun onError(exception: ImageCaptureException) {
-                                        errorMessage = "촬영 실패: ${exception.message}"
-                                        isCapturing = false
-                                    }
+                        capture.takePicture(
+                            ContextCompat.getMainExecutor(context),
+                            object : ImageCapture.OnImageCapturedCallback() {
+                                override fun onCaptureSuccess(image: ImageProxy) {
+                                    val bitmap = image.toBitmap()
+                                    image.close()
+                                    onImageCaptured(bitmap)
+                                    isCapturing = false
                                 }
-                            )
-                        }
+
+                                override fun onError(exception: ImageCaptureException) {
+                                    errorMessage = "촬영 실패: ${exception.message}"
+                                    isCapturing = false
+                                }
+                            }
+                        )
                     }
                 },
                 containerColor = MaterialTheme.colorScheme.primary,
