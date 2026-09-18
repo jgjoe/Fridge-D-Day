@@ -23,6 +23,7 @@ class SettingsDataStore(private val context: Context) {
         val DEFAULT_DAYS_BEFORE = intPreferencesKey("default_days_before")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val IS_FIRST_LAUNCH = booleanPreferencesKey("is_first_launch")
+        val NOTIFICATION_PERMISSION_DENIED = booleanPreferencesKey("notification_permission_denied")
     }
 
     val settingsFlow: Flow<AppSettings> = context.dataStore.data.map { prefs ->
@@ -38,7 +39,8 @@ class SettingsDataStore(private val context: Context) {
             } catch (e: Exception) {
                 ThemeMode.SYSTEM
             },
-            isFirstLaunch = prefs[Keys.IS_FIRST_LAUNCH] ?: true
+            isFirstLaunch = prefs[Keys.IS_FIRST_LAUNCH] ?: true,
+            notificationPermissionDenied = prefs[Keys.NOTIFICATION_PERMISSION_DENIED] ?: false
         )
     }
 
@@ -72,4 +74,37 @@ class SettingsDataStore(private val context: Context) {
             prefs[Keys.IS_FIRST_LAUNCH] = false
         }
     }
+
+    /**
+     * 시스템 알림 권한 요청 결과를 실제 거부 이력에 반영한다.
+     *
+     * 허용이면 이력을 지우고, 거부여도 rationale이 남아 있으면 실제 거부로 기록하며,
+     * 다이얼로그 취소처럼 둘 다 아니면 기존 이력을 그대로 둔다.
+     */
+    suspend fun recordNotificationPermissionResult(isGranted: Boolean, shouldShowRationale: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.NOTIFICATION_PERMISSION_DENIED] = notificationPermissionDenialAfterResult(
+                priorRealDenial = prefs[Keys.NOTIFICATION_PERMISSION_DENIED] ?: false,
+                isGranted = isGranted,
+                shouldShowRationale = shouldShowRationale
+            )
+        }
+    }
+}
+
+/**
+ * 시스템 요청 결과 뒤에 남길 실제 거부 이력.
+ *
+ * - 허용: 이력을 지운다.
+ * - 거부 + rationale=true: 사용자가 실제로 거부했으므로 이력을 남긴다.
+ * - 거부 + rationale=false: 다이얼로그 취소일 수 있으므로 기존 이력을 그대로 둔다.
+ */
+internal fun notificationPermissionDenialAfterResult(
+    priorRealDenial: Boolean,
+    isGranted: Boolean,
+    shouldShowRationale: Boolean
+): Boolean = when {
+    isGranted -> false
+    shouldShowRationale -> true
+    else -> priorRealDenial
 }

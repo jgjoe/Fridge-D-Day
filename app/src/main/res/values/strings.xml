@@ -1,4 +1,7 @@
 <resources>
     <string name="app_name">오늘도 신선</string>
-    <string name="widget_description">오늘/내일 만료되는 항목을 표시합니다</string>
+    <string name="widget_description">곧 만료되는 식품을 한눈에 보여줍니다</string>
+    <string name="widget_title">오늘도 신선</string>
+    <string name="widget_scan">스캔</string>
+    <string name="widget_empty">지금 챙길 식품이 없어요</string>
 </resources>

@@ -13,14 +13,14 @@ import app.fridgedday.util.DDayState
  */
 @Composable
 fun DDayState.containerColor(): Color = when (this) {
-    DDayState.SAFE -> MaterialTheme.colorScheme.primaryContainer
+    DDayState.SAFE -> MaterialTheme.colorScheme.surfaceVariant
     DDayState.WARNING -> MaterialTheme.colorScheme.tertiaryContainer
     DDayState.EXPIRED -> MaterialTheme.colorScheme.errorContainer
 }
 
 @Composable
 fun DDayState.contentColor(): Color = when (this) {
-    DDayState.SAFE -> MaterialTheme.colorScheme.onPrimaryContainer
+    DDayState.SAFE -> MaterialTheme.colorScheme.onSurfaceVariant
     DDayState.WARNING -> MaterialTheme.colorScheme.onTertiaryContainer
     DDayState.EXPIRED -> MaterialTheme.colorScheme.onErrorContainer
 }
