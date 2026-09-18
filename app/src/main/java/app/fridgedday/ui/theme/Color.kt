@@ -11,7 +11,8 @@ import androidx.compose.ui.graphics.Color
  * D-023: the light scheme keeps the warm near-white backdrop but drops most of D-022's beige/cream
  * mass. The page is near-white, task surfaces are clean white, forest is the single strong anchor and
  * mint is the only support accent. Warmth is limited to the neutral/background roles; amber and error
- * keep their meaning, and the dark scheme is untouched.
+ * keep their meaning. D-028 later made the shipping product light-only; the legacy dark token set below
+ * remains unused by the shipping theme.
  *
  * Freshness (D-Day) and storage-location semantics keep resolving through Material theme roles
  * (see FreshnessStatus.kt), so screens never hardcode status colors:
@@ -95,7 +96,7 @@ internal val FridgeDDayLightColorScheme: ColorScheme = lightColorScheme(
     scrim = Color.Black
 )
 
-/** Explicit v2 dark scheme: green-charcoal background, lifted surfaces, soft forest anchor. */
+/** Legacy pre-D-028 dark token set retained as an unused reference; shipping v2 never selects it. */
 internal val FridgeDDayDarkColorScheme: ColorScheme = darkColorScheme(
     primary = ForestSoft,
     onPrimary = Color(0xFF10331A),

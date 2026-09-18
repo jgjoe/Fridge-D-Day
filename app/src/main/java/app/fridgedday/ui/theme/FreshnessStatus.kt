@@ -8,8 +8,8 @@ import app.fridgedday.util.DDayState
 
 /**
  * Single source of truth for freshness status colors.
- * Uses MaterialTheme tonal containers so dark mode and contrast come from the theme,
- * never from hardcoded ARGB in cards or badges.
+ * Uses MaterialTheme tonal containers so semantic contrast comes from the active theme roles,
+ * never from hardcoded ARGB in cards or badges. Shipping v2 is light-only (D-028).
  */
 @Composable
 fun DDayState.containerColor(): Color = when (this) {
