@@ -1,0 +1,30 @@
+name: 버그 리포트
+description: 오늘도 신선의 재현 가능한 오류를 공개 정보만으로 제보합니다.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ONEstore에는 v2.0.0/code5가 공개 배포되어 있고, Google Play는 같은 버전의 closed Alpha 테스트를 진행 중입니다.
+        식품 사진, 개인 식품 기록, 비공개 QA 자료, 키·토큰 등 비밀값은 첨부하지 마세요.
+  - type: input
+    id: environment
+    attributes:
+      label: 실행 환경
+      description: 기기 모델, Android 버전, 앱 버전처럼 재현에 필요한 공개 정보만 적어주세요.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 재현 절차
+      description: 오류를 재현할 수 있는 순서를 적어주세요.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: 기대 결과 / 실제 결과
+      description: 기대했던 동작과 실제로 발생한 동작을 구분해서 적어주세요.
+    validations:
+      required: true

@@ -47,6 +47,9 @@ captures/
 # .idea/caches
 # .idea/modules.xml
 
+# VS Code
+.vscode/
+
 # Keystore files
 *.jks
 *.keystore
@@ -99,6 +102,22 @@ Desktop.ini
 # Other
 *.swp
 .~lock.*
+
+# Local project/agent state
+/AGENTS.md
+/CLAUDE.md
+/.omp/
+/.claude/
+/.paseo/
+/memory/
+/docs/DAILY_WORKFLOW.md
+
+# Local review and temporary evidence
+/.review-snapshots/
+/tmp/
+
+# Obsolete/local store creative workspace
+/playstore_assets/
 
 # Local OCR QA data (real photos, labels, and measured outputs)
 /qa-private/

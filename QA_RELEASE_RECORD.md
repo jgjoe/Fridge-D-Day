@@ -1,16 +1,18 @@
 # 품질 기준선과 릴리스 판단 기록
 
-> 문제 → 측정 → 개선 → 회귀 자동화 → 릴리스 판단의 전 과정과, 그 판단이 만든 v1.0.2까지를 사실 단위로 고정한 문서다.
+> 문제 → 측정 → 개선 → 회귀 자동화 → 릴리스 판단의 전 과정과, 그 판단이 만든 v1.0.2 및 현재 v2.0.0 RC/배포 상태를 사실 단위로 고정한 문서다.
 > 포트폴리오·이력서에서 이 프로젝트를 인용할 때의 근거는 여기다.
 
 ## 최종 상태
 
-**v1.0.2 Released (원스토어, 2026-08-12) / QA hardening active — 공개 배포 이력 2건**
+**v2.0.0/code5 exact RC / ONEstore v2 검증 통과·배포 완료 / Google Play Alpha 비공개 테스트 출시**
 
 - v1.0을 원스토어에 출시했다.
 - 출시 후 v1.1 후보에 독립 한국 식품 라벨 55장 QA와 릴리스 게이트를 적용했고, 잔여 오답과 표본 공백을 근거로 **배포를 보류(No-Go)**했다. 이는 프로젝트 전체의 No-Go나 “정확도가 낮아 포기”한 결과가 아니라, 측정과 회귀 기준으로 검증되지 않은 업데이트를 차단한 릴리스 판단이다.
-- **보류 사유를 정확도가 아닌 제품 구조로 해결하고 2026-08-12에 v1.0.2를 원스토어에 배포했다.** 공개 배포 이력은 v1.0 → v1.0.2 2건이다. 상세는 아래 「6. 보류 이후 — v1.0.2」.
-- 2026-09-09부터 QA hardening을 재개했다. 현재 공개 버전은 여전히 v1.0.2이고 v1.1은 Release No-Go 상태를 유지한다. bundled Korean ML Kit 전환은 검증 후 `main`에 반영했고, 누락 형식 Phase 3 수집과 Phase 4 A32 측정도 같은 날 닫았다. 다음 단계는 별도 UI/UX 리디자인과 전체 검증이며, 새 원스토어 공개 버전을 제품 완료 기준으로 삼는다.
+- **보류 사유를 정확도가 아닌 제품 구조로 해결하고 2026-08-12에 v1.0.2를 원스토어에 배포했다.** 당시까지 공개 배포 이력은 v1.0 → v1.0.2 2건이었다. 상세는 아래 「6. 보류 이후 — v1.0.2」.
+- 2026-09-17 v2 UI/UX 리디자인과 로컬 release-readiness를 닫고, 2026-09-18 기준 exact RC `9c8b0ef`를 `2.0.0/code5`로 확정했다. exact RC gate는 JVM unit `107/107`, lint `0` errors, Galaxy A32 explicit 19-class non-OCR instrumentation `65/65`를 통과했다. v2는 D-028에 따라 light-only이며 D-031에 따라 route transition을 즉시 전환으로 고정한다.
+- Google Play에는 v2.0.0/code5가 closed Alpha로 출시돼 선택한 테스터에게 제공 중이고 `>=12` opt-in gate가 확인됐다. 14일 요건과 Production 공개는 아직 완료되지 않았다.
+- ONEstore v2.0.0/code5는 개발자 확인 기준 검증 통과·배포 완료 상태다. Browser Control 중단 이후 콘솔을 독립 재확인하지 않았으므로, 이 외부 상태의 증거 등급은 사용자 확인으로 기록한다.
 
 > **2026-08-15 개정 이력**: 이 문서는 2026-07-22 종료 시점 판정(`v1.0 Released / v1.1 QA No-Go / Archived`)을 담고 있었다.
 > 2026-08-12 v1.0.2 배포로 그 판정이 더 이상 현재 상태가 아니므로 최종 상태와 검증 사실을 갱신했다.
@@ -83,13 +85,13 @@ v1.1을 보류한 사유는 **D-30 기준 오답 15/55**였다. 정확도를 더
   → **2026-08-23 해소.** Galaxy A32(SM-A325N, Android 13 / API 33)에서 v1.0.2 릴리스 빌드를 실기기 검증했다.
   에뮬레이터로 재현할 수 없던 **「한국어 OCR 모듈 미설치 + 네트워크 없음」** 경로를 실제로 밟았고 크래시는 없었다.
   다만 **결함 2건**(실패 안내와 진행 표시 동시 노출 / 실패 원인 미구분·로그 부재)을 발견해 수정했으며,
-  수정본은 **아직 배포되지 않았다.** 상세는 [docs/qa/DEVICE_VERIFICATION.md](docs/qa/DEVICE_VERIFICATION.md).
+  이 수정본은 **2026-08-23 당시에는 아직 배포되지 않았다.** 상세는 [docs/qa/DEVICE_VERIFICATION.md](docs/qa/DEVICE_VERIFICATION.md).
   ⚠️ 에뮬레이터 검증은 API 36, 이번 실기기 검증은 API 33이다. 같은 조건으로 취급하지 않는다.
 - v1.0.2는 **OCR 인식 정확도를 개선한 버전이 아니다.** 55장 기준선 수치는 v1.1 QA 시점 값 그대로이며, 달라진 것은 잘못된 값이 저장되는 경로다.
 
-### 7. QA hardening 재개 — bundled Korean ML Kit main 반영 (2026-09-09, 미배포)
+### 7. QA hardening 재개 — bundled Korean ML Kit main 반영 (2026-09-09 당시 미배포)
 
-2026-08-23 실기기 검증에서 확인된 unbundled 한국어 OCR의 첫 실행 모듈 의존성을 없애기 위해 한국어 OCR 의존성을 `com.google.mlkit:text-recognition-korean:16.0.1`로 전환했다. 검증을 마친 변경은 PR #9로 `main`에 merge했다. 현재 원스토어 공개본은 여전히 v1.0.2이며 이 변경은 아직 스토어에 배포하지 않았다.
+2026-08-23 실기기 검증에서 확인된 unbundled 한국어 OCR의 첫 실행 모듈 의존성을 없애기 위해 한국어 OCR 의존성을 `com.google.mlkit:text-recognition-korean:16.0.1`로 전환했다. 검증을 마친 변경은 PR #9로 `main`에 merge했다. **2026-09-09 당시** 원스토어 공개본은 v1.0.2였고 이 변경은 아직 스토어에 배포되지 않은 상태였다.
 
 검증 결과:
 
@@ -178,7 +180,7 @@ D-30/D-180 이중 릴리스 회귀:
 - `qa-private/` 전체와 `local.properties`는 `.gitignore` 대상이며 추적하거나 이동·삭제하지 않는다.
 - 공개 `docs/qa/manifest.example.csv`와 `docs/qa/ocr-benchmark.csv`는 열 구조 예시이며 실측 데이터가 아니다.
 - Release APK는 `androidTest` 소스·자산을 패키징하지 않으며, 종료 점검에서 `qa-private/`·라벨·manifest·`local.properties` 관련 항목이 없음을 확인했다.
-- 앱은 ML Kit 전이 manifest가 추가하는 `INTERNET` 권한을 명시적으로 제거하며, 앱 수준의 광고·분석·추적 SDK를 추가하지 않았다. QA 과정에서도 스토어 제출을 수행하지 않았다.
+- 앱은 ML Kit 전이 manifest가 추가하는 `INTERNET` 권한을 명시적으로 제거하며, 앱 수준의 광고·분석·추적 SDK를 추가하지 않았다. 이 절이 기록하는 v1 QA 종료 과정에서는 스토어 제출을 수행하지 않았다.
 
 ## 알려진 한계
 
@@ -186,7 +188,7 @@ D-30/D-180 이중 릴리스 회귀:
 - 고정 55장 자체에는 한글 날짜와 연속 숫자 날짜 실사진이 없다. 2026-09-09 별도 실제 촬영일 coverage에서 한글 식품 라벨 1장은 측정했지만 표본이 작고, 연속 숫자 식품 라벨은 생활권 추가 탐색에서도 확보하지 못했다. 비식품 auxiliary probe는 형식 동작 참고용일 뿐 식품 성능으로 일반화하지 않는다.
 - 제조일자와 소비기한이 함께 인식될 때 평가일과 가까운 제조일자를 선택할 수 있다.
 - `clear_dot_matrix`, `embossed_low_contrast`, `dark`, 연도 없는 `MM.DD`의 작은 그룹에서 실패가 집중됐지만 그룹 크기가 작아 전체 사용자 환경으로 일반화할 수 없다.
-- 사용자 베타를 실행하지 않았으므로 사용자 수, 재사용 의향, 실제 사용 성공률을 주장하지 않는다.
+- v1.0.2 종료 시점에는 사용자 베타를 실행하지 않았다. 이후 v2에서는 4명의 소규모 사용성 검증과 affected-user targeted retest를 수행했지만, 이를 사용자 규모·재사용 의향·실사용 전체 성공률로 일반화하지 않는다.
 - `INTERNET` 권한 부재는 종료 변경 후 현재 저장소에서 재빌드한 Release APK로 검증했다. 기존 원스토어 배포 바이너리는 이 작업에서 내려받아 별도 검사하거나 업데이트하지 않았으므로, 그 바이너리의 권한 목록으로 일반화하지 않는다.
 
 이 한계는 후속 개발 목록이 아니라 종료 시점의 해석 경계다.
@@ -195,7 +197,7 @@ D-30/D-180 이중 릴리스 회귀:
 
 다음 항목은 저장소 코드·문서·로컬 digest와 검증 로그로 뒷받침된다. 문장으로 과장하지 않고 사실 단위로만 재사용한다.
 
-- Kotlin·Jetpack Compose 기반 오프라인 우선 Android 앱을 단독 개발하고 원스토어에 배포했다. 공개 배포 이력 2건(v1.0 → v1.0.2, 2026-08-12).
+- Kotlin·Jetpack Compose 기반 오프라인 우선 Android 앱을 단독 개발하고 ONEstore에 v1.0 → v1.0.2 → v2.0.0/code5를 공개 배포했다. Google Play는 같은 v2의 closed Alpha 단계이며 Production 공개는 아직 아니다.
 - Release APK에서 `INTERNET` 권한을 제거했고 앱 수준의 광고·분석·추적 SDK를 추가하지 않았으며 식품 기록은 Room/DataStore에 로컬 저장한다.
 - 출시 후 서로 다른 한국 식품 라벨 55장으로 D-30/D-180 조건부 OCR 기준선을 측정했다.
 - D-30 정확 일치 37/55에서 40/55로 개선했고 최대 실패 유형 `wrong_date`를 14건에서 11건으로 줄였다.
@@ -205,5 +207,9 @@ D-30/D-180 이중 릴리스 회귀:
 - unit 29개, instrumentation 15개, lint, Debug/Release build를 통과했다. (v1.1 QA 시점에는 unit 19개·instrumentation 11개였다.)
 - 남은 오답과 표본 공백을 근거로 v1.1 배포를 No-Go로 판정해 기준 미달 후보의 스토어 업데이트를 차단했다.
 - 그 보류 사유를 정확도가 아닌 저장 경로 차단(인식 결과 사용자 확인 후 저장)으로 해결하고, Room 데이터 보존과 배포 APK 권한을 검증한 뒤 v1.0.2를 배포했다.
+- v2.0.0/code5 exact RC는 JVM unit `107/107`, lint `0` errors, Galaxy A32 non-OCR instrumentation `65/65`를 통과했고, `INTERNET` 권한과 비공개 QA/local-agent 엔트리 부재를 다시 확인했다.
+- v2 사용성 검증은 4명·32개 task observation에서 반복 friction을 식별·수정했고, 영향을 받은 2명 대상 4개 repaired flow를 `8/8`로 재검증했다. 소규모 closure evidence로만 사용한다.
+- v2는 light-only(D-028)이며 Settings에 테마 선택기를 노출하지 않는다. Navigation Compose route transition도 D-031에 따라 즉시 전환이다.
+- 배포 상태는 ONEstore v2.0.0/code5 검증 통과·배포 완료(개발자 확인)와 Google Play Alpha `2.0.0/code5` 출시 및 `>=12` opt-in gate 확인까지 진행됐다. 남은 dual-store 완료 gate는 Google Play 14일 요건과 Production 공개다.
 
 자소서 문장, 사용자 규모, 실사용 전체 정확도, 식품 폐기 감소량은 이 문서에서 만들거나 추정하지 않는다.
