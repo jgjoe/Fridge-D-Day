@@ -62,9 +62,9 @@ fun IconDisc(
 /**
  * 지금 위치/현재 동작을 가리키는 forest 컨테이너.
  *
- * 라이트에서는 깊은 forest가 화면의 유일한 강한 색면이 되고, 다크에서는 같은 forest의 lifted
- * 컨테이너가 대비를 만든다. 다크에 `primary`를 그대로 쓰면 옅은 연두가 화면에서 가장 밝은 면이
- * 되어 "짙은 forest" 언어가 뒤집힌다. 두 값 모두 기존 역할에서만 나오며 새 색을 만들지 않는다.
+ * shipping v2는 D-028에 따라 라이트 전용이므로 실제 제품에서는 `primary` 역할을 사용한다.
+ * 비-light ColorScheme이 테스트/프리뷰에서 주입될 때의 방어 분기는 남아 있지만 제품의 다크 모드
+ * 지원을 의미하지 않는다.
  */
 @Composable
 internal fun actionCurrentContainer(): Color =
@@ -87,7 +87,7 @@ internal fun actionCurrentContent(): Color =
  * 지금 색 구성표가 밝은 쪽인지.
  *
  * `ColorScheme.isLight`는 Material3 1.2.0에서 공개 API가 아니므로 배경의 실제 휘도로 판정한다.
- * 라이트 배경은 0.88, 다크 배경은 0.01이라 어느 테마 모드로 그려지든 값이 흔들리지 않는다.
+ * 제품은 light-only지만 비-light ColorScheme을 주입하는 테스트/프리뷰 방어를 위해 이 판정은 유지한다.
  */
 @Composable
 private fun isLightScheme(): Boolean = MaterialTheme.colorScheme.background.luminance() > 0.5f
