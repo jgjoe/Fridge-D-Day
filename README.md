@@ -64,8 +64,8 @@ v2는 **light-only**로 고정했고 시스템 night mode와 무관하게 같은
 요구사항: Android Studio · JDK 17 · Android SDK 36
 
 ```bash
-git clone https://github.com/jgjoe/Fridge-D-Day.git
-cd Fridge-D-Day
+git clone https://github.com/jgjoe/fridge-d-day.git
+cd fridge-d-day
 ./gradlew assembleDebug
 ```
 
