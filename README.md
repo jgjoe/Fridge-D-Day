@@ -3,11 +3,11 @@
 **유통기한을 촬영·직접 입력으로 관리하고, 인식 결과를 확인한 뒤 저장하는 로컬 우선 Android 앱**
 
 [![ONEstore](https://img.shields.io/badge/ONEstore-v2.0.0%20public-brightgreen)](https://m.onestore.co.kr/v2/ko-kr/app/0001003331)
-[![Google Play](https://img.shields.io/badge/Google%20Play-v2.0.0%20closed%20Alpha-orange?logo=googleplay&logoColor=white)](https://play.google.com/apps/testing/app.fridgedday)
+[![Google Play](https://img.shields.io/badge/Google%20Play-%EC%A0%95%EC%8B%9D%20%EC%B6%9C%EC%8B%9C%20%EC%8B%AC%EC%82%AC%20%EC%A4%91-orange?logo=googleplay&logoColor=white)](https://play.google.com/apps/testing/app.fridgedday)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9.22-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 
-ONEstore에는 **v2.0.0 / code5**가 공개 배포되어 있습니다. Google Play에는 같은 버전이 **closed Alpha**로 출시되어 있고, `>=12` opt-in gate는 확인됐지만 14일 요건과 Production 공개는 아직 진행 중입니다.
+ONEstore에 **v2.0.0**을 공개 배포했고, Google Play는 비공개 테스트를 마치고 **정식 출시 심사 중**입니다.
 
 <p align="center">
   <img src="docs/images/today-fresh-1.png" width="31%" alt="오늘도 신선 v2 Today 화면" />
@@ -38,17 +38,14 @@ OCR은 후보를 제안할 뿐 자동 저장하지 않습니다. 인식한 날�
 
 v2는 **light-only**로 고정했고 시스템 night mode와 무관하게 같은 제품 색상 체계를 사용합니다. Navigation Compose의 화면 간 route 전환은 장식 애니메이션 없이 즉시 전환합니다.
 
-## 검증된 범위
+## 검증 결과
 
-- v2.0.0/code5 exact RC: JVM unit **107/107**, lint **0 errors**
-- Galaxy A32 explicit non-OCR instrumentation: **65/65**
+- 출시 후보(v2.0.0)에서 단위 테스트 **107/107**, lint 오류 **0건**
+- Galaxy A32 실기기에서 문자인식 외 기능 테스트 **65/65**
 - 55장 고정 OCR 회귀셋으로 변경 전후 퇴행 여부를 반복 확인
-- 소규모 usability 검증에서 반복 마찰을 수정한 뒤 affected-user targeted retest 수행
-- Release artifact에서 `INTERNET` 권한과 비공개 QA 자료 미포함을 검증
-- ONEstore **v2.0.0/code5 공개 배포 완료**
-- Google Play **closed Alpha 출시 완료**, Production은 아직 진행 중
-
-> OCR 벤치마크 수치는 고정 표본·고정 평가 조건의 회귀 기준선이며 일반 사용자 전체 정확도로 해석하지 않습니다.
+- 사용성 테스트에서 찾은 반복 마찰을 수정하고, 해당 사용자에게 수정 흐름을 다시 검증
+- 릴리스 빌드에 `INTERNET` 권한과 비공개 QA 자료가 들어가지 않았음을 자동 검증
+- ONEstore **v2.0.0 공개 배포**, Google Play 비공개 테스트 완료
 
 ## 기술 스택
 
@@ -90,9 +87,11 @@ cd Fridge-D-Day
 | 채널 | 상태 |
 |---|---|
 | ONEstore | **v2.0.0 / code5 공개 배포** |
-| Google Play | **v2.0.0 / code5 closed Alpha** · `>=12` opt-in 확인 · 14일 요건 진행 중 |
-| Google Play Production | 아직 미공개 |
+| Google Play | 비공개 테스트 완료 · **정식 출시 심사 중** |
 
----
+## 만든 사람
 
-**Jigwan Joe** · [GitHub @jgjoe](https://github.com/jgjoe)
+**Jigwan Joe** — Android · Backend
+
+- GitHub: [@jgjoe](https://github.com/jgjoe)
+- Email: jigwan.joe@gmail.com
