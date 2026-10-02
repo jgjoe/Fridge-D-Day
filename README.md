@@ -15,7 +15,7 @@ ONEstore에 **v2.0.0**을 공개 배포했고, Google Play는 비공개 테스�
   <img src="docs/images/today-fresh-3.png" width="31%" alt="오늘도 신선 v2 Record 화면" />
 </p>
 
-## 무엇을 하는 앱인가
+## 주요 기능
 
 - **Today** — 식품별 D-Day와 임박 상태를 한눈에 확인
 - **Scan** — CameraX + ML Kit OCR로 날짜 후보를 추출하고 사용자 확인 후 저장
@@ -24,7 +24,7 @@ ONEstore에 **v2.0.0**을 공개 배포했고, Google Play는 비공개 테스�
 - **알림·위젯** — WorkManager 알림과 홈 화면 위젯으로 임박 항목 확인
 - **백업·복원** — Android SAF를 이용한 로컬 JSON 내보내기·가져오기
 
-## 핵심 설계
+## 설계 판단
 
 ### 로컬 우선 데이터 처리
 
@@ -46,6 +46,13 @@ v2는 **light-only**로 고정했고 시스템 night mode와 무관하게 같은
 - 사용성 테스트에서 찾은 반복 마찰을 수정하고, 해당 사용자에게 수정 흐름을 다시 검증
 - 릴리스 빌드에 `INTERNET` 권한과 비공개 QA 자료가 들어가지 않았음을 자동 검증
 - ONEstore **v2.0.0 공개 배포**, Google Play 비공개 테스트 완료
+
+검증 기록:
+
+- [QA_RELEASE_RECORD.md](QA_RELEASE_RECORD.md) — 릴리스 판단과 v1→v2 검증 요약
+- [docs/qa/OCR_BENCHMARK.md](docs/qa/OCR_BENCHMARK.md) — OCR 측정 조건·회귀 기준
+- [docs/qa/DEVICE_VERIFICATION.md](docs/qa/DEVICE_VERIFICATION.md) — Galaxy A32 실기기 검증
+- [개인정보 처리방침](https://jgjoe.github.io/fresh-today-privacy/privacy_policy.html)
 
 ## 기술 스택
 
@@ -74,20 +81,6 @@ cd fridge-d-day
 ```bash
 ./gradlew test lintDebug assembleRelease
 ```
-
-## 상세 검증 문서
-
-- [QA_RELEASE_RECORD.md](QA_RELEASE_RECORD.md) — 릴리스 판단과 v1→v2 검증 요약
-- [docs/qa/OCR_BENCHMARK.md](docs/qa/OCR_BENCHMARK.md) — OCR 측정 조건·회귀 기준
-- [docs/qa/DEVICE_VERIFICATION.md](docs/qa/DEVICE_VERIFICATION.md) — Galaxy A32 실기기 검증
-- [개인정보 처리방침](https://jgjoe.github.io/fresh-today-privacy/privacy_policy.html)
-
-## 배포 상태
-
-| 채널 | 상태 |
-|---|---|
-| ONEstore | **v2.0.0 / code5 공개 배포** |
-| Google Play | 비공개 테스트 완료 · **정식 출시 심사 중** |
 
 ## 만든 사람
 
